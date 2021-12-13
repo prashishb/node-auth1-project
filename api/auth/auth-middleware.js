@@ -1,4 +1,5 @@
 const User = require('../users/users-model');
+const bcrypt = require('bcryptjs');
 
 function restricted(req, res, next) {
   if (req.session.user) {
@@ -13,7 +14,7 @@ function restricted(req, res, next) {
 
 async function checkUsernameFree(req, res, next) {
   const { username } = req.body;
-  const user = await User.findBy({ username });
+  const [user] = await User.findBy({ username });
   if (user) {
     next({
       status: 422,
@@ -49,9 +50,33 @@ function checkPasswordLength(req, res, next) {
   }
 }
 
+function hashPassword(req, res, next) {
+  const { password } = req.body;
+  const hash = bcrypt.hashSync(password, 10);
+  req.user = { ...req.body, password: hash };
+  next();
+}
+
+async function checkPassword(req, res, next) {
+  const { username, password } = req.body;
+  const [user] = await User.findBy({ username });
+  const isValid = bcrypt.compareSync(password, user.password);
+  if (!isValid) {
+    next({
+      status: 401,
+      message: 'Invalid credentials',
+    });
+  } else {
+    req.session.user = user;
+    next();
+  }
+}
+
 module.exports = {
   restricted,
   checkUsernameFree,
   checkUsernameExists,
   checkPasswordLength,
+  hashPassword,
+  checkPassword,
 };
